@@ -1,0 +1,44 @@
+id: WP-004
+platform: wordpress
+cwe: 862
+severity: high
+summary: REST route without a real permission_callback
+source: [register_rest_route]
+sanitizers: []
+sink: permission_callback_missing
+precision_notes: >
+  Fires only on a literal endpoint array passed to register_rest_route(): when an endpoint has no
+  permission_callback (or null), or when its callback always allows access ('__return_true', or a
+  closure whose whole body is `return true` / `=> true`) and its methods are not all read-only.
+  A missing callback on a read-only route is reported as a weak finding: WordPress itself warns about
+  it, and the route may still perform writes (CVE-2026-9172). Silent when the endpoint array is not
+  literal (built elsewhere or passed as a variable), has computed or unkeyed entries (spread),
+  `methods` cannot be resolved statically, or the callback is any other function or callable.
+  Known misses: routes registered in a loop over a property (CVE-2025-11372); permission callbacks
+  that always return a truthy non-boolean. Known noise: '__return_true' kept on a write route whose
+  handler checks current_user_can() itself (GutenKit 2.1.1 after CVE-2024-9234). Not exploitable,
+  but against the WordPress REST guidance, so it stays reported.
+params:
+  read_only_methods: [GET, HEAD]
+  default_methods: [GET]          # WordPress default when 'methods' is omitted
+  method_constants:
+    WP_REST_Server::READABLE: GET
+    WP_REST_Server::CREATABLE: POST
+    WP_REST_Server::EDITABLE: POST, PUT, PATCH
+    WP_REST_Server::DELETABLE: DELETE
+    WP_REST_Server::ALLMETHODS: GET, POST, PUT, PATCH, DELETE
+  open_permission_callbacks: [__return_true]
+references:
+  - cve: CVE-2022-0218
+    fix_commit: https://plugins.trac.wordpress.org/changeset/2656984/wp-html-mail/trunk/includes/class-template-designer.php
+    corpus: WP-004/case-01
+  - cve: CVE-2022-0680
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/plezi/tags/1.0.2&new_path=/plezi/tags/1.0.3
+    corpus: WP-004/case-02
+  - cve: CVE-2026-9172
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/devs-accounting/tags/1.2.0&new_path=/devs-accounting/tags/1.2.1
+    corpus: WP-004/case-03
+
+plugin:
+  description_html: inspectionDescriptions/WP004UnprotectedRestRoute.html
+  quick_fix: add_permission_callback
