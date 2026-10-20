@@ -23,6 +23,8 @@ sanitizers: []
 sink: permission_callback_missing
 precision_notes: >
   When the rule stays silent, and why.
+params:                      # optional, rule-specific detection data (e.g. HTTP method tables)
+  read_only_methods: [GET, HEAD]
 references:
   - cve: CVE-YYYY-NNNNN
     fix_commit: https://...
