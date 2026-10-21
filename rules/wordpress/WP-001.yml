@@ -5,9 +5,15 @@ severity: high
 summary: AJAX / admin-post handler changes state without a capability check
 source: [add_action]
 sanitizers: [current_user_can, user_can, is_super_admin, current_user_can_for_blog, current_user_can_for_site,
-             "*user_can*", "->*user_can*"]
+             "*user_can*", "->*user_can*", "*guard*", "*verify_access*", "*check*access*", "*check*permission*", "*has*capabilit*",
+             "*check*capabilit*", "*authorize*", "*can_manage*", "*check_role*", "->*guard*", "->*verify_access*",
+             "->*check*access*", "->*check*permission*", "->*has*capabilit*", "->*check*capabilit*", "->*authorize*"]
 sink: hook_handler_state_change
 precision_notes: >
+  A handler whose add_action() call sits inside an `if` testing one of the checks, or whose
+  registering function calls a check before registering it, is treated as checked (registration-time guard). Helper names matching the wildcard patterns (…guard…,
+  …check…access…, …verify…nonce…) count as checks, because such helpers usually live in other files.
+  Handlers that only write notice/review/onboarding-style keys (low_impact_keys) are weak.
   Fires on a handler registered with add_action on wp_ajax_* (not nopriv) or admin_post_* (not
   nopriv) whose callback is resolvable in the same file (named function, $this/self/__CLASS__
   method, 'Class::method', inline closure) and which calls a state-changing sink with no capability
@@ -18,6 +24,8 @@ precision_notes: >
   or the check lives in another file. Note: a wp_ajax_* hook requires a logged-in user, so the impact
   is "any subscriber can do this".
 params:
+  # Writes only to keys like these (dismissed notices, review prompts, onboarding/tracking flags) → weak.
+  low_impact_keys: ["(dismiss|notice|review|rating|rate_?us|banner|tracking|optin|opt_in|feedback|onboard|popup|modal|tour|pointer|welcome|upsell|promo|nag|survey|deactivat)"]
   endpoint_prefixes: [wp_ajax_, admin_post_]   # handlers also hooked elsewhere are event reactors: skipped
   hook_prefixes: [wp_ajax_, admin_post_]
   excluded_prefixes: [wp_ajax_nopriv_, admin_post_nopriv_]

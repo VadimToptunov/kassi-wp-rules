@@ -21,6 +21,8 @@ precision_notes: >
   WP_REST_Request read as an array ($request['id']); flows through helper functions; values stored
   in the database (second-order SQLi).
 params:
+  # A capability check in the same function makes findings weak (only privileged users reach the sink).
+  admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
   guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
   terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
   receivers: [wpdb]

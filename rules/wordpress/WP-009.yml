@@ -14,6 +14,8 @@ precision_notes: >
   not reported. Values read from the database or options are not tracked, so second-order
   injection is not covered.
 params:
+  # A capability check in the same function makes findings weak (only privileged users reach the sink).
+  admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
   sink_functions: [unserialize, maybe_unserialize]
   guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
   terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]

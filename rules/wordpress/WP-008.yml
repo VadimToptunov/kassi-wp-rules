@@ -3,7 +3,7 @@ platform: wordpress
 cwe: 601
 severity: medium
 summary: wp_redirect() to a URL from request data
-source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE', '$_SERVER[HTTP_REFERER]',
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE',
          '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params']
 sanitizers: [wp_validate_redirect, admin_url, home_url, site_url, network_admin_url, network_home_url,
              get_admin_url, get_home_url, get_permalink, wp_login_url]
@@ -14,7 +14,8 @@ precision_notes: >
   through: they clean characters, not the host. add_query_arg / remove_query_arg carry only the taint
   of their base-URL argument; without one they redirect to the current host. URLs built on
   admin_url() / home_url() etc. or checked with wp_validate_redirect() are safe. Silent on parameters
-  and unknown functions. header('Location: ...') is not covered in v0.1.
+  and unknown functions. header('Location: ...') is not covered in v0.1. Redirecting back to the
+  HTTP referer is not reported (low value, needs the victim to arrive from the attacker's page).
 params:
   guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
   terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]

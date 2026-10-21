@@ -16,6 +16,8 @@ precision_notes: >
   get_role($r) is not an allow-list: any existing role, including administrator, passes.
   sanitize_key / sanitize_text_field pass the taint through.
 params:
+  # A capability check in the same function makes findings weak (only privileged users reach the sink).
+  admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
   role_methods: [set_role, add_role, add_cap]
   user_functions: [wp_insert_user, wp_update_user]
   role_keys: [role]

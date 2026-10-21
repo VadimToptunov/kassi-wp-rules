@@ -8,6 +8,10 @@ sanitizers: [current_user_can, user_can, is_super_admin, current_user_can_for_bl
              "*user_can*", "->*user_can*", hash_equals, hash_hmac]
 sink: nopriv_privileged_action
 precision_notes: >
+  A handler whose add_action() call sits inside an `if` testing one of the checks, or whose
+  registering function calls a check before registering it, is treated as checked (registration-time guard). Helper names matching the wildcard patterns (…guard…,
+  …check…access…, …verify…nonce…) count as checks, because such helpers usually live in other files.
+  Handlers that only write notice/review/onboarding-style keys (low_impact_keys) are weak.
   Fires on a handler registered on wp_ajax_nopriv_* or admin_post_nopriv_* (callback resolvable
   in the same file) that calls a privileged sink: options, other users, roles and capabilities,
   file deletion and moves, plugins and themes. A capability check anywhere in the handler silences it.
@@ -15,6 +19,8 @@ precision_notes: >
   registration, login cookies, uploads) are deliberately not in the sink list. A nonce is not a
   substitute: nonces for logged-out visitors are shared.
 params:
+  # Writes only to keys like these (dismissed notices, review prompts, onboarding/tracking flags) → weak.
+  low_impact_keys: ["(dismiss|notice|review|rating|rate_?us|banner|tracking|optin|opt_in|feedback|onboard|popup|modal|tour|pointer|welcome|upsell|promo|nag|survey|deactivat)"]
   endpoint_prefixes: [wp_ajax_, admin_post_]   # handlers also hooked elsewhere are event reactors: skipped
   hook_prefixes: [wp_ajax_nopriv_, admin_post_nopriv_]
   sinks: [update_option, delete_option, update_site_option, delete_site_option, wp_update_user,

@@ -15,11 +15,14 @@ precision_notes: >
   they do not stop traversal. basename / sanitize_file_name / realpath and an allow-list guard
   (in_array) or validate_file() comparison (inside the guarded branch or after an early exit) are
   accepted. $_FILES[...]['tmp_name'], ['size'] and ['error'] are server-generated, so they are
-  clean; ['name'] and ['type'] are input. Silent on parameters and unknown functions. realpath is
+  clean, and so is ['name'] for traversal purposes: PHP keeps only its basename (the type of the
+  file is WP-011's concern). Silent on parameters and unknown functions. realpath is
   accepted without checking the prefix comparison that should follow it (silence over noise).
   Known miss: a realpath()+strpos() prefix guard on a different variable than the sink argument is not
   recognised, so such fixed code is still reported (Awesome Support 6.1.5, CVE-2023-5355; not in the corpus).
 params:
+  # A capability check in the same function makes findings weak (only privileged users reach the sink).
+  admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
   sink_args:
     unlink: "0"
     file_get_contents: "0"
@@ -32,7 +35,7 @@ params:
     wp_delete_file: "0"
     move_uploaded_file: "1"
   include_sinks: [include, include_once, require, require_once]
-  clean_keys: [tmp_name, size, error]
+  clean_keys: [tmp_name, size, error, name]   # PHP strips directory parts from $_FILES[...]['name']
   guard_functions: [in_array, array_key_exists, validate_file, is_numeric, ctype_digit, ctype_alnum]
   terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
   format_functions: [sprintf]

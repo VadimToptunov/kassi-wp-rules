@@ -9,8 +9,8 @@ sanitizers: [wp_http_validate_url, admin_url, home_url, site_url, rest_url, get_
 sink: outbound_http_url
 precision_notes: >
   Request input → assignments, concatenation, passthrough functions → the URL argument of
-  wp_remote_get / wp_remote_post / wp_remote_request / wp_remote_head / download_url within one
-  function. wp_safe_remote_*() are the fix and are not sinks. wp_http_validate_url() and URLs built
+  wp_remote_get / wp_remote_post / wp_remote_request / wp_remote_head within one function
+  (download_url() is safe: it uses wp_safe_remote_get()). `if (!wp_http_validate_url($u)) return;` is a guard. wp_safe_remote_*() are the fix and are not sinks. wp_http_validate_url() and URLs built
   on admin_url()/home_url() are clean. esc_url / esc_url_raw / sanitize_text_field pass the taint
   through: they do not restrict the host. An allow-list on a derived variable (parse_url host) is not
   recognised; the cases in the corpus combine it with wp_safe_remote_get(). Input placed after a fixed
@@ -18,10 +18,12 @@ precision_notes: >
   change the destination and is not reported (host_prefix_cleans); a constant base is assumed to end
   at the host (a base without a trailing slash followed by '@evil' would be missed).
 params:
+  # A capability check in the same function makes findings weak (only privileged users reach the sink).
+  admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
   host_prefix_cleans: [true]
   query_arg_functions: [add_query_arg, remove_query_arg]
-  sink_functions: [wp_remote_get, wp_remote_post, wp_remote_request, wp_remote_head, download_url]
-  guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
+  sink_functions: [wp_remote_get, wp_remote_post, wp_remote_request, wp_remote_head]   # download_url() already uses wp_safe_remote_get()
+  guard_functions: [wp_http_validate_url, in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
   terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
   format_functions: [sprintf]
   passthrough: [wp_unslash, stripslashes, trim, urldecode, rawurldecode, base64_decode, esc_url, esc_url_raw,

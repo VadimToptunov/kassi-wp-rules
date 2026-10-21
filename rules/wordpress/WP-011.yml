@@ -16,6 +16,8 @@ precision_notes: >
   accepted). Silent when the destination ends in a literal extension ('… . ".pdf"'), because the
   uploader cannot choose the type then. Checks made in another function are not seen.
 params:
+  # A capability check in the same function makes findings weak (only privileged users reach the sink).
+  admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
   sink_functions: [move_uploaded_file]
   destination_argument: ["1"]
 references:

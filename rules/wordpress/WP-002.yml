@@ -5,15 +5,23 @@ severity: medium
 summary: AJAX / admin-post handler changes state without nonce verification
 source: [add_action]
 sanitizers: [check_admin_referer, check_ajax_referer, wp_verify_nonce, "*verify_nonce*", "*check_nonce*",
-             "->*verify_nonce*", "->*check_nonce*"]
+             "->*verify_nonce*", "->*check_nonce*", "*check*access*", "->*check*access*",
+             "*security_check*", "->*security_check*", "*verify_request*", "->*verify_request*",
+             "*verify_access*", "->*verify_access*"]
 sink: hook_handler_state_change
 precision_notes: >
+  A handler whose add_action() call sits inside an `if` testing one of the checks, or whose
+  registering function calls a check before registering it, is treated as checked (registration-time guard). Helper names matching the wildcard patterns (…guard…,
+  …check…access…, …verify…nonce…) count as checks, because such helpers usually live in other files.
+  Handlers that only write notice/review/onboarding-style keys (low_impact_keys) are weak.
   Same handler discovery as WP-001 (wp_ajax_* / admin_post_*, not nopriv, callback in the same
   file). Fires when the handler calls a state-changing sink with no check_admin_referer /
   check_ajax_referer / wp_verify_nonce in its body or its same-file helpers. A nonce call counts
   wherever it appears, even if its result is ignored. Changes to the current user's own meta are not
   reported. Handlers also registered on a nopriv hook are skipped (public endpoints).
 params:
+  # Writes only to keys like these (dismissed notices, review prompts, onboarding/tracking flags) → weak.
+  low_impact_keys: ["(dismiss|notice|review|rating|rate_?us|banner|tracking|optin|opt_in|feedback|onboard|popup|modal|tour|pointer|welcome|upsell|promo|nag|survey|deactivat)"]
   endpoint_prefixes: [wp_ajax_, admin_post_]   # handlers also hooked elsewhere are event reactors: skipped
   hook_prefixes: [wp_ajax_, admin_post_]
   excluded_prefixes: [wp_ajax_nopriv_, admin_post_nopriv_]
