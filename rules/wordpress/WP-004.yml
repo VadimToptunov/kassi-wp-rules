@@ -7,17 +7,18 @@ source: [register_rest_route]
 sanitizers: []
 sink: permission_callback_missing
 precision_notes: >
-  Fires only on a literal endpoint array passed to register_rest_route(): when an endpoint has no
-  permission_callback (or null), or when its callback always allows access ('__return_true', or a
-  closure whose whole body is `return true` / `=> true`) and its methods are not all read-only.
-  A missing callback on a read-only route is reported as a weak finding: WordPress itself warns about
-  it, and the route may still perform writes (CVE-2026-9172). Silent when the endpoint array is not
-  literal (built elsewhere or passed as a variable), has computed or unkeyed entries (spread),
-  `methods` cannot be resolved statically, or the callback is any other function or callable.
+  Fires only on a literal endpoint array passed to register_rest_route().
+  Warning: an endpoint with no permission_callback (or null) whose methods are not all read-only.
+  Weak: a missing callback on a read-only route (WordPress warns too, and a route declared GET can
+  still write, see CVE-2026-9172); and an always-true callback ('__return_true', or a closure whose
+  whole body is `return true` / `=> true`) on a write route. The latter is weak because
+  intentionally public write routes (form submissions, signed handshakes that authenticate inside
+  the handler) are declared the same way: 16 such routes in the 2026-10 top-20 plugin run, none
+  exploitable. v0.1 does not follow the handler, so it cannot separate them from CVE-2022-0218.
+  Silent when the endpoint array is not literal, has computed or unkeyed entries (spread), `methods`
+  cannot be resolved statically, or the callback is any other function or callable.
   Known misses: routes registered in a loop over a property (CVE-2025-11372); permission callbacks
-  that always return a truthy non-boolean. Known noise: '__return_true' kept on a write route whose
-  handler checks current_user_can() itself (GutenKit 2.1.1 after CVE-2024-9234). Not exploitable,
-  but against the WordPress REST guidance, so it stays reported.
+  that always return a truthy non-boolean.
 params:
   read_only_methods: [GET, HEAD]
   default_methods: [GET]          # WordPress default when 'methods' is omitted
