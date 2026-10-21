@@ -1,0 +1,45 @@
+id: WP-005
+platform: wordpress
+cwe: 89
+severity: critical
+summary: SQL built from request data without $wpdb->prepare()
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE', '$_FILES', '$_SERVER[REQUEST_URI]', '$_SERVER[QUERY_STRING]',
+         '$_SERVER[PHP_SELF]', '$_SERVER[PATH_INFO]', '$_SERVER[HTTP_*]',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params',
+         '->get_url_params', '->get_file_params', '->get_body']
+sanitizers: [intval, absint, floatval, boolval, esc_sql, sanitize_key, sanitize_sql_orderby, wp_parse_id_list, '->prepare']
+sink: wpdb_query_sql
+precision_notes: >
+  Intra-procedural taint (core/flow): request input → assignments, `.=`, concatenation,
+  interpolation, array reads/writes, foreach, `??`, passthrough functions → the first argument of a
+  $wpdb query method or of $wpdb->prepare() (input in the format string is not escaped by prepare).
+  sanitize_text_field / wp_unslash pass the taint through: they do not make a value SQL-safe.
+  Silent when the value comes from a parameter, a property, an unknown function (not proven), a
+  numeric cast, a %d/%f sprintf placeholder, or one of the sanitizers; and for a value checked by
+  a guard (in_array allow-list, is_numeric, ...) inside `if (guard)` or after `if (!guard) { return; }`. Statements are processed in
+  source order without joining branches, so a conditional re-assignment can hide a flow. Known misses:
+  WP_REST_Request read as an array ($request['id']); flows through helper functions; values stored
+  in the database (second-order SQLi).
+params:
+  guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
+  terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
+  receivers: [wpdb]
+  sink_methods: [query, get_results, get_var, get_row, get_col, prepare]
+  format_functions: [sprintf]
+  passthrough: [wp_unslash, stripslashes, stripslashes_deep, trim, ltrim, rtrim, strtolower, strtoupper,
+                sanitize_text_field, sanitize_textarea_field, urldecode, rawurldecode, html_entity_decode,
+                base64_decode, implode, join, str_replace, substr, json_decode, maybe_unserialize, wp_kses,
+                wp_kses_post]
+references:
+  - cve: CVE-2020-35012
+    fix_commit: https://plugins.trac.wordpress.org/changeset/2336019/events-manager
+    corpus: WP-005/case-01
+  - cve: CVE-2022-1006
+    fix_commit: https://plugins.trac.wordpress.org/changeset/2695427
+    corpus: WP-005/case-02
+  - cve: CVE-2022-23911
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/ap-custom-testimonial/tags/1.4.7&new_path=/ap-custom-testimonial/tags/1.4.8
+    corpus: WP-005/case-03
+plugin:
+  description_html: inspectionDescriptions/WP005UnpreparedSql.html
+  quick_fix: none

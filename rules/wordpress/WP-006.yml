@@ -1,0 +1,42 @@
+id: WP-006
+platform: wordpress
+cwe: 79
+severity: high
+summary: Request data output without escaping
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE', '$_FILES', '$_SERVER[REQUEST_URI]', '$_SERVER[QUERY_STRING]',
+         '$_SERVER[PHP_SELF]', '$_SERVER[PATH_INFO]', '$_SERVER[HTTP_*]',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params',
+         '->get_url_params', '->get_body']
+sanitizers: [esc_html, esc_attr, esc_url, esc_js, esc_textarea, esc_xml, esc_html__, esc_attr__, wp_kses,
+             wp_kses_post, wp_kses_data, htmlspecialchars, htmlentities, intval, absint, floatval, boolval,
+             json_encode, wp_json_encode, urlencode, rawurlencode, sanitize_key, sanitize_title,
+             sanitize_text_field, sanitize_textarea_field, sanitize_email, number_format]
+sink: echo_print
+precision_notes: >
+  Reflected flows only: request input → (assignments, concatenation, interpolation, passthrough
+  functions) → echo / print / short echo tag within one scope (a function or the file's top level,
+  i.e. templates). Values read back from the database (stored XSS) are not tracked in v0.1.
+  sanitize_text_field / sanitize_textarea_field are treated as safe: they strip tags, but do not
+  escape quotes, so a value echoed inside an attribute can still break out. That is a known miss,
+  accepted to keep the rule quiet. Output context (element vs attribute vs URL) is not checked, so
+  esc_html inside an href is not reported. Silent on parameters, properties and unknown functions.
+params:
+  guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
+  terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
+  format_functions: [sprintf]
+  passthrough: [wp_unslash, stripslashes, stripslashes_deep, trim, ltrim, rtrim, strtolower, strtoupper,
+                urldecode, rawurldecode, html_entity_decode, wp_specialchars_decode, base64_decode, implode,
+                join, str_replace, substr, ucfirst, ucwords, nl2br, add_query_arg, remove_query_arg]
+references:
+  - cve: CVE-2021-42363
+    fix_commit: https://plugins.trac.wordpress.org/changeset/2625941/woo-preview-emails/trunk/views/form.php
+    corpus: WP-006/case-01
+  - cve: CVE-2021-25112
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/whmcs-bridge/tags/6.3&new_path=/whmcs-bridge/tags/6.5b
+    corpus: WP-006/case-02
+  - cve: CVE-2022-23912
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/ap-custom-testimonial/tags/1.4.7&new_path=/ap-custom-testimonial/tags/1.4.8
+    corpus: WP-006/case-03
+plugin:
+  description_html: inspectionDescriptions/WP006UnescapedOutput.html
+  quick_fix: none
