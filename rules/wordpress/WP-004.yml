@@ -11,7 +11,8 @@ precision_notes: >
   Warning: an endpoint with no permission_callback (or null) whose methods are not all read-only.
   Weak: a missing callback on a read-only route (WordPress warns too, and a route declared GET can
   still write, see CVE-2026-9172); and an always-true callback ('__return_true', or a closure whose
-  whole body is `return true` / `=> true`) on a write route. The latter is weak because
+  whole body is `return true` / `=> true`) on a write route, unless the route handler is in the
+  same file and calls a privileged sink with no capability check (then a warning). Otherwise weak, because
   intentionally public write routes (form submissions, signed handshakes that authenticate inside
   the handler) are declared the same way: 16 such routes in the 2026-10 top-20 plugin run, none
   exploitable. v0.1 does not follow the handler, so it cannot separate them from CVE-2022-0218.
@@ -29,6 +30,13 @@ params:
     WP_REST_Server::DELETABLE: DELETE
     WP_REST_Server::ALLMETHODS: GET, POST, PUT, PATCH, DELETE
   open_permission_callbacks: [__return_true]
+  # Escalation: an always-true callback is a warning (not weak) when the route handler, resolved in
+  # the same file, calls one of these with no capability check.
+  privileged_sinks: [update_option, delete_option, update_site_option, delete_site_option, wp_update_user,
+          wp_delete_user, "->set_role", "->add_role", "->add_cap", "->remove_cap", unlink, rmdir, rename, copy,
+          wp_delete_file, activate_plugin, deactivate_plugins, delete_plugins, switch_theme]
+  capability_checks: [current_user_can, user_can, is_super_admin, current_user_can_for_blog, current_user_can_for_site,
+             "*user_can*", "->*user_can*", hash_equals, hash_hmac]
 references:
   - cve: CVE-2022-0218
     fix_commit: https://plugins.trac.wordpress.org/changeset/2656984/wp-html-mail/trunk/includes/class-template-designer.php

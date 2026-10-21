@@ -1,0 +1,47 @@
+id: WP-001
+platform: wordpress
+cwe: 862
+severity: high
+summary: AJAX / admin-post handler changes state without a capability check
+source: [add_action]
+sanitizers: [current_user_can, user_can, is_super_admin, current_user_can_for_blog, current_user_can_for_site,
+             "*user_can*", "->*user_can*"]
+sink: hook_handler_state_change
+precision_notes: >
+  Fires on a handler registered with add_action on wp_ajax_* (not nopriv) or admin_post_* (not
+  nopriv) whose callback is resolvable in the same file (named function, $this/self/__CLASS__
+  method, 'Class::method', inline closure) and which calls a state-changing sink with no capability
+  check anywhere in its body or in the same-file helpers it calls (one level). A check counts
+  wherever it appears in the handler, even if its result is ignored (silence over noise).
+  Changes to the current user's own meta (update_user_meta(get_current_user_id(), ...)) are not
+  privileged. Handlers also registered on a nopriv hook are left to WP-003. Silent when the callback
+  or the check lives in another file. Note: a wp_ajax_* hook requires a logged-in user, so the impact
+  is "any subscriber can do this".
+params:
+  endpoint_prefixes: [wp_ajax_, admin_post_]   # handlers also hooked elsewhere are event reactors: skipped
+  hook_prefixes: [wp_ajax_, admin_post_]
+  excluded_prefixes: [wp_ajax_nopriv_, admin_post_nopriv_]
+  skip_if_also_hooked: [wp_ajax_nopriv_, admin_post_nopriv_]
+  sinks: [update_option, delete_option, add_option, update_site_option, delete_site_option,
+          update_user_meta, delete_user_meta, add_user_meta, wp_update_user, wp_insert_user, wp_create_user,
+          wp_delete_user, "->set_role", "->add_role", "->add_cap", "->remove_cap",
+          wp_insert_post, wp_update_post, wp_delete_post, wp_trash_post, update_post_meta, delete_post_meta,
+          add_post_meta, update_term_meta, wp_set_object_terms, wp_insert_term, wp_delete_term,
+          wp_insert_comment, wp_delete_comment, "wpdb->insert", "wpdb->update", "wpdb->delete",
+          "wpdb->replace", "wpdb->query", unlink, rmdir, rename, copy, file_put_contents,
+          move_uploaded_file, wp_delete_file, activate_plugin, deactivate_plugins, delete_plugins,
+          switch_theme]
+  self_scoped_sinks: [update_user_meta, delete_user_meta, add_user_meta]
+  current_user_functions: [get_current_user_id]
+  # A nonce check without a capability check: weak (safe only while the nonce is admin-only).
+  weak_if_called: [check_admin_referer, check_ajax_referer, wp_verify_nonce, "*verify_nonce*", "*check_nonce*"]
+references:
+  - cve: CVE-2023-6966
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/the-moneytizer/tags/9.6.3&new_path=/the-moneytizer/tags/10.0.1
+    corpus: WP-001/case-01
+  - cve: CVE-2025-3063
+    fix_commit: https://downloads.wordpress.org/plugin/shopperapproved-reviews.2.2.1.zip
+    corpus: WP-001/case-02
+plugin:
+  description_html: inspectionDescriptions/WP001MissingCapabilityCheck.html
+  quick_fix: none

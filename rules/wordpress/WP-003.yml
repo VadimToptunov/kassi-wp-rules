@@ -1,0 +1,32 @@
+id: WP-003
+platform: wordpress
+cwe: 862
+severity: critical
+summary: Privileged action in a handler on an unauthenticated (nopriv) hook
+source: [add_action]
+sanitizers: [current_user_can, user_can, is_super_admin, current_user_can_for_blog, current_user_can_for_site,
+             "*user_can*", "->*user_can*", hash_equals, hash_hmac]
+sink: nopriv_privileged_action
+precision_notes: >
+  Fires on a handler registered on wp_ajax_nopriv_* or admin_post_nopriv_* (callback resolvable
+  in the same file) that calls a privileged sink: options, other users, roles and capabilities,
+  file deletion and moves, plugins and themes. A capability check anywhere in the handler silences it.
+  Actions that public forms legitimately perform (wp_insert_post, $wpdb->insert, user
+  registration, login cookies, uploads) are deliberately not in the sink list. A nonce is not a
+  substitute: nonces for logged-out visitors are shared.
+params:
+  endpoint_prefixes: [wp_ajax_, admin_post_]   # handlers also hooked elsewhere are event reactors: skipped
+  hook_prefixes: [wp_ajax_nopriv_, admin_post_nopriv_]
+  sinks: [update_option, delete_option, update_site_option, delete_site_option, wp_update_user,
+          wp_delete_user, "->set_role", "->add_role", "->add_cap", "->remove_cap", unlink, rmdir, rename, copy,
+          wp_delete_file, activate_plugin, deactivate_plugins, delete_plugins, switch_theme]
+references:
+  - cve: CVE-2021-4362
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/kiwi-social-share/tags/2.1.0&new_path=/kiwi-social-share/tags/2.1.1
+    corpus: WP-003/case-01
+  - cve: CVE-2025-2266
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/checkout-mestres-wp/tags/8.7.5&new_path=/checkout-mestres-wp/tags/8.7.5.1
+    corpus: WP-003/case-02
+plugin:
+  description_html: inspectionDescriptions/WP003NoprivPrivilegedAction.html
+  quick_fix: none

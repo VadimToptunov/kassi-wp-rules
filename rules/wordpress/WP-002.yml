@@ -1,0 +1,41 @@
+id: WP-002
+platform: wordpress
+cwe: 352
+severity: medium
+summary: AJAX / admin-post handler changes state without nonce verification
+source: [add_action]
+sanitizers: [check_admin_referer, check_ajax_referer, wp_verify_nonce, "*verify_nonce*", "*check_nonce*",
+             "->*verify_nonce*", "->*check_nonce*"]
+sink: hook_handler_state_change
+precision_notes: >
+  Same handler discovery as WP-001 (wp_ajax_* / admin_post_*, not nopriv, callback in the same
+  file). Fires when the handler calls a state-changing sink with no check_admin_referer /
+  check_ajax_referer / wp_verify_nonce in its body or its same-file helpers. A nonce call counts
+  wherever it appears, even if its result is ignored. Changes to the current user's own meta are not
+  reported. Handlers also registered on a nopriv hook are skipped (public endpoints).
+params:
+  endpoint_prefixes: [wp_ajax_, admin_post_]   # handlers also hooked elsewhere are event reactors: skipped
+  hook_prefixes: [wp_ajax_, admin_post_]
+  excluded_prefixes: [wp_ajax_nopriv_, admin_post_nopriv_]
+  skip_if_also_hooked: [wp_ajax_nopriv_, admin_post_nopriv_]
+  sinks: [update_option, delete_option, add_option, update_site_option, delete_site_option,
+          update_user_meta, delete_user_meta, add_user_meta, wp_update_user, wp_insert_user, wp_create_user,
+          wp_delete_user, "->set_role", "->add_role", "->add_cap", "->remove_cap",
+          wp_insert_post, wp_update_post, wp_delete_post, wp_trash_post, update_post_meta, delete_post_meta,
+          add_post_meta, update_term_meta, wp_set_object_terms, wp_insert_term, wp_delete_term,
+          wp_insert_comment, wp_delete_comment, "wpdb->insert", "wpdb->update", "wpdb->delete",
+          "wpdb->replace", "wpdb->query", unlink, rmdir, rename, copy, file_put_contents,
+          move_uploaded_file, wp_delete_file, activate_plugin, deactivate_plugins, delete_plugins,
+          switch_theme]
+  self_scoped_sinks: [update_user_meta, delete_user_meta, add_user_meta]
+  current_user_functions: [get_current_user_id]
+references:
+  - cve: CVE-2023-0554
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/quick-restaurant-menu/tags/2.0.2&new_path=/quick-restaurant-menu/tags/2.1.0
+    corpus: WP-002/case-01
+  - cve: CVE-2023-6968
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/the-moneytizer/tags/9.6.3&new_path=/the-moneytizer/tags/10.0.1
+    corpus: WP-002/case-02
+plugin:
+  description_html: inspectionDescriptions/WP002MissingNonceVerification.html
+  quick_fix: none
