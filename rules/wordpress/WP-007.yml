@@ -1,0 +1,54 @@
+id: WP-007
+platform: wordpress
+cwe: 22
+severity: high
+summary: File path built from request data (path traversal / arbitrary file access)
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE', '$_FILES',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params']
+sanitizers: [sanitize_file_name, basename, wp_basename, realpath, absint, intval, sanitize_key, sanitize_title, md5, sha1]
+sink: file_path_argument
+precision_notes: >
+  Intra-procedural taint (core/flow): request input → assignments, concatenation, interpolation,
+  passthrough functions → the path argument of unlink, file_get_contents, readfile, fopen, file,
+  copy, rename, file_put_contents, wp_delete_file, or include/require(_once).
+  sanitize_text_field, str_replace('../', '', ...) and trailingslashit pass the taint through:
+  they do not stop traversal. basename / sanitize_file_name / realpath and an allow-list guard
+  (in_array) or validate_file() comparison (inside the guarded branch or after an early exit) are
+  accepted. $_FILES[...]['tmp_name'], ['size'] and ['error'] are server-generated, so they are
+  clean; ['name'] and ['type'] are input. Silent on parameters and unknown functions. realpath is
+  accepted without checking the prefix comparison that should follow it (silence over noise).
+  Known miss: a realpath()+strpos() prefix guard on a different variable than the sink argument is not
+  recognised, so such fixed code is still reported (Awesome Support 6.1.5, CVE-2023-5355; not in the corpus).
+params:
+  sink_args:
+    unlink: "0"
+    file_get_contents: "0"
+    readfile: "0"
+    fopen: "0"
+    file: "0"
+    copy: "0,1"
+    rename: "0,1"
+    file_put_contents: "0"
+    wp_delete_file: "0"
+    move_uploaded_file: "1"
+  include_sinks: [include, include_once, require, require_once]
+  clean_keys: [tmp_name, size, error]
+  guard_functions: [in_array, array_key_exists, validate_file, is_numeric, ctype_digit, ctype_alnum]
+  terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
+  format_functions: [sprintf]
+  passthrough: [wp_unslash, stripslashes, sanitize_text_field, trim, ltrim, rtrim, urldecode, rawurldecode,
+                base64_decode, str_replace, trailingslashit, untrailingslashit, path_join, wp_normalize_path,
+                dirname, implode, join, strtolower, substr, html_entity_decode]
+references:
+  - cve: CVE-2026-2421
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/wc-carta-docente/tags/1.5.0&new_path=/wc-carta-docente/tags/1.5.1
+    corpus: WP-007/case-01
+  - cve: CVE-2025-5391
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/wc-purchase-orders/tags/1.0.2&new_path=/wc-purchase-orders/tags/1.0.3
+    corpus: WP-007/case-02
+  - cve: CVE-2020-11738
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/duplicator/tags/1.3.26&new_path=/duplicator/tags/1.3.28
+    corpus: WP-007/case-03
+plugin:
+  description_html: inspectionDescriptions/WP007UnsafeFilePath.html
+  quick_fix: none
