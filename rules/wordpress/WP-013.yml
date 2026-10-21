@@ -1,0 +1,34 @@
+id: WP-013
+platform: wordpress
+cwe: 79
+severity: medium
+summary: Shortcode attributes output without escaping (stored XSS)
+source: [add_shortcode]
+sanitizers: [esc_html, esc_attr, esc_url, esc_js, esc_textarea, esc_xml, esc_html__, esc_attr__, wp_kses, wp_kses_post,
+             wp_kses_data, intval, absint, floatval, boolval, sanitize_key, sanitize_html_class, sanitize_title,
+             sanitize_hex_color, sanitize_email, number_format, htmlspecialchars, htmlentities, tag_escape]
+sink: shortcode_output
+precision_notes: >
+  For shortcodes registered with add_shortcode whose callback is in the same file: the callback's
+  first parameter ($atts), directly or via shortcode_atts() and passthrough functions, reaches a
+  return value or echo without an escaper. Contributors can write shortcodes, so this is stored XSS
+  in every post that uses it. sanitize_text_field is deliberately not an escaper: it keeps quotes,
+  so a value can break out of an HTML attribute (CVE-2024-11199). extract($atts) is not followed.
+  The $content parameter is not a source. A shortcode registered and removed again (remove_shortcode)
+  in the same function only evaluates internal strings and is skipped.
+params:
+  unregistrars: [remove_shortcode]
+  passthrough: [shortcode_atts, wp_parse_args, array_merge, trim, strtolower, strtoupper, ucfirst, sanitize_text_field,
+                sanitize_textarea_field, wp_unslash, stripslashes, str_replace, implode, join, urldecode, html_entity_decode]
+  format_functions: [sprintf]
+  guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
+references:
+  - cve: CVE-2026-2496
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/eds-font-awesome/tags/2.0&new_path=/eds-font-awesome/tags/2.1
+    corpus: WP-013/case-01
+  - cve: CVE-2025-10126
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/mybrain-utilities/tags/1.0.8&new_path=/mybrain-utilities/tags/1.1.0
+    corpus: WP-013/case-02
+plugin:
+  description_html: inspectionDescriptions/WP013ShortcodeAttributeXss.html
+  quick_fix: none

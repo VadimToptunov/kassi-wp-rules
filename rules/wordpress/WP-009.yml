@@ -1,0 +1,33 @@
+id: WP-009
+platform: wordpress
+cwe: 502
+severity: critical
+summary: PHP object injection via unserialize() of request data
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE', '$_SERVER[HTTP_*]',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params', '->get_body']
+sanitizers: [intval, absint, json_decode]
+sink: unserialize_input
+precision_notes: >
+  Request input (including cookies) → assignments, concatenation, passthrough functions
+  (base64_decode, trim, stripslashes, gzuncompress, ...) → the first argument of unserialize()
+  or maybe_unserialize() within one function. unserialize($x, ['allowed_classes' => false]) is
+  not reported. Values read from the database or options are not tracked, so second-order
+  injection is not covered.
+params:
+  sink_functions: [unserialize, maybe_unserialize]
+  guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
+  terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
+  format_functions: [sprintf]
+  passthrough: [wp_unslash, stripslashes, stripslashes_deep, trim, ltrim, rtrim, base64_decode, urldecode,
+                rawurldecode, gzuncompress, gzinflate, gzdecode, str_replace, html_entity_decode, sanitize_text_field,
+                sanitize_textarea_field, hex2bin, strrev]
+references:
+  - cve: CVE-2021-39321
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/sassy-social-share/tags/3.3.23&new_path=/sassy-social-share/tags/3.3.24
+    corpus: WP-009/case-01
+  - cve: CVE-2024-12313
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/woocommerce-compare-products/tags/3.2.1&new_path=/woocommerce-compare-products/tags/3.2.2
+    corpus: WP-009/case-02
+plugin:
+  description_html: inspectionDescriptions/WP009ObjectInjection.html
+  quick_fix: none

@@ -1,0 +1,39 @@
+id: WP-010
+platform: wordpress
+cwe: 918
+severity: high
+summary: Server-side request to a URL from request data (SSRF)
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE', '$_SERVER[HTTP_*]',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params', '->get_body']
+sanitizers: [wp_http_validate_url, admin_url, home_url, site_url, rest_url, get_permalink]
+sink: outbound_http_url
+precision_notes: >
+  Request input → assignments, concatenation, passthrough functions → the URL argument of
+  wp_remote_get / wp_remote_post / wp_remote_request / wp_remote_head / download_url within one
+  function. wp_safe_remote_*() are the fix and are not sinks. wp_http_validate_url() and URLs built
+  on admin_url()/home_url() are clean. esc_url / esc_url_raw / sanitize_text_field pass the taint
+  through: they do not restrict the host. An allow-list on a derived variable (parse_url host) is not
+  recognised; the cases in the corpus combine it with wp_safe_remote_get(). Input placed after a fixed
+  scheme and host ('https://api.example.com/' . $id, CONSTANT_BASE . $path, sprintf('%s/…', clean)) cannot
+  change the destination and is not reported (host_prefix_cleans); a constant base is assumed to end
+  at the host (a base without a trailing slash followed by '@evil' would be missed).
+params:
+  host_prefix_cleans: [true]
+  query_arg_functions: [add_query_arg, remove_query_arg]
+  sink_functions: [wp_remote_get, wp_remote_post, wp_remote_request, wp_remote_head, download_url]
+  guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
+  terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
+  format_functions: [sprintf]
+  passthrough: [wp_unslash, stripslashes, trim, urldecode, rawurldecode, base64_decode, esc_url, esc_url_raw,
+                sanitize_url, sanitize_text_field, html_entity_decode, str_replace, untrailingslashit,
+                trailingslashit]
+references:
+  - cve: CVE-2026-0807
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/frontis-blocks/tags/1.1.6&new_path=/frontis-blocks/tags/1.1.7
+    corpus: WP-010/case-01
+  - cve: CVE-2023-7073
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/auto-post-thumbnail/tags/4.1.7&new_path=/auto-post-thumbnail/tags/4.2.0
+    corpus: WP-010/case-02
+plugin:
+  description_html: inspectionDescriptions/WP010ServerSideRequestForgery.html
+  quick_fix: none

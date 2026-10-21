@@ -1,0 +1,36 @@
+id: WP-012
+platform: wordpress
+cwe: 269
+severity: critical
+summary: Request data decides a user's role or capabilities (privilege escalation)
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE', '$_SERVER[HTTP_*]',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params', '->get_body']
+sanitizers: [intval, absint]
+sink: role_or_capabilities
+precision_notes: >
+  Request input → (assignments, if/else paths, passthrough functions) → the role passed to
+  ->set_role / ->add_role / ->add_cap, the 'role' entry of wp_insert_user / wp_update_user args
+  (or the whole args when they are not a literal array), or the value of update_user_meta for a
+  *capabilities key. An allow-list guard (in_array) on the role makes it clean, inside the guarded
+  branch, after an early exit, or after a fallback re-assignment (`if (!in_array($r, $ok)) { $r = 'subscriber'; }`).
+  get_role($r) is not an allow-list: any existing role, including administrator, passes.
+  sanitize_key / sanitize_text_field pass the taint through.
+params:
+  role_methods: [set_role, add_role, add_cap]
+  user_functions: [wp_insert_user, wp_update_user]
+  role_keys: [role]
+  meta_functions: [update_user_meta, add_user_meta, update_user_option]
+  guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
+  terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
+  passthrough: [wp_unslash, stripslashes, trim, sanitize_text_field, sanitize_key, sanitize_title, strtolower,
+                wp_parse_args, array_merge]
+references:
+  - cve: CVE-2026-12144
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/woo-wholesale-pricing/tags/2.0.5&new_path=/woo-wholesale-pricing/tags/2.0.6
+    corpus: WP-012/case-01
+  - cve: CVE-2026-12394
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/memberglut/tags/1.1.0&new_path=/memberglut/tags/1.1.5
+    corpus: WP-012/case-02
+plugin:
+  description_html: inspectionDescriptions/WP012PrivilegeEscalation.html
+  quick_fix: none

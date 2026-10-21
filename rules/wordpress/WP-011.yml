@@ -1,0 +1,33 @@
+id: WP-011
+platform: wordpress
+cwe: 434
+severity: critical
+summary: Uploaded file stored without a file type check
+source: ['$_FILES']
+sanitizers: [wp_check_filetype, wp_check_filetype_and_ext, wp_handle_upload, wp_handle_sideload, media_handle_upload,
+             getimagesize, exif_imagetype, wp_get_image_mime, finfo_file, mime_content_type, pathinfo, "*allowed_mime*",
+             "*check_file_type*", "*validate_file_type*"]
+sink: stored_upload
+precision_notes: >
+  Reports move_uploaded_file() in a function (or the file's top level) that contains no file type
+  check: wp_check_filetype(_and_ext), wp_handle_upload/sideload, an image or MIME sniff, or an
+  extension read with pathinfo(). Any such call anywhere in the function silences it, whatever its
+  position and however its result is used (silence over noise; a check placed after the move is
+  accepted). Silent when the destination ends in a literal extension ('… . ".pdf"'), because the
+  uploader cannot choose the type then. Checks made in another function are not seen.
+params:
+  sink_functions: [move_uploaded_file]
+  destination_argument: ["1"]
+references:
+  - cve: CVE-2024-6311
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/funnelforms-free/tags/3.7.3.2&new_path=/funnelforms-free/tags/3.7.4.1
+    corpus: WP-011/case-01
+  - cve: CVE-2025-6058
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/wpbookit/tags/1.0.4&new_path=/wpbookit/tags/1.0.5
+    corpus: WP-011/case-02
+  - cve: CVE-2025-6057
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/wpbookit/tags/1.0.4&new_path=/wpbookit/tags/1.0.5
+    corpus: WP-011/case-03
+plugin:
+  description_html: inspectionDescriptions/WP011UnsafeFileUpload.html
+  quick_fix: none
