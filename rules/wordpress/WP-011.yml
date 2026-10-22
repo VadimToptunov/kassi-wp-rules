@@ -9,6 +9,8 @@ sanitizers: [wp_check_filetype, wp_check_filetype_and_ext, wp_handle_upload, wp_
              "*check_file_type*", "*validate_file_type*"]
 sink: stored_upload
 precision_notes: >
+  A call to a file-name neutraliser in the function (…antiscript…, …neutrali…) makes the finding
+  weak: the type check is probably delegated (contact-form-7's uploader).
   Reports move_uploaded_file() in a function (or the file's top level) that contains no file type
   check: wp_check_filetype(_and_ext), wp_handle_upload/sideload, an image or MIME sniff, or an
   extension read with pathinfo(). Any such call anywhere in the function silences it, whatever its
@@ -16,6 +18,9 @@ precision_notes: >
   accepted). Silent when the destination ends in a literal extension ('… . ".pdf"'), because the
   uploader cannot choose the type then. Checks made in another function are not seen.
 params:
+  # Name-defanging helpers (CF7's wpcf7_antiscript_file_name): weak, because the defence lives elsewhere.
+  filename_neutralisers: ["*antiscript*", "*neutrali*", "*defang*", "*disarm*", "*strip_dangerous*",
+                          "->*antiscript*", "->*neutrali*"]
   # A capability check in the same function makes findings weak (only privileged users reach the sink).
   admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
   sink_functions: [move_uploaded_file]

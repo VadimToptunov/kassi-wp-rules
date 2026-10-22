@@ -13,6 +13,8 @@ sanitizers: [esc_html, esc_attr, esc_url, esc_js, esc_textarea, esc_xml, esc_htm
              sanitize_text_field, sanitize_textarea_field, sanitize_email, number_format]
 sink: echo_print
 precision_notes: >
+  A nonce verified in the same function makes the finding weak: the attacker cannot build a working
+  link without a valid nonce (WooCommerce helper redirect, reported by the bounty pipeline triage).
   Reflected flows only: request input → (assignments, concatenation, interpolation, passthrough
   functions) → echo / print / short echo tag within one scope (a function or the file's top level,
   i.e. templates). Values read back from the database (stored XSS) are not tracked in v0.1.
@@ -21,6 +23,8 @@ precision_notes: >
   accepted to keep the rule quiet. Output context (element vs attribute vs URL) is not checked, so
   esc_html inside an href is not reported. Silent on parameters, properties and unknown functions.
 params:
+  # A nonce verified in the same function: a crafted link alone cannot trigger it → weak.
+  nonce_checks: [wp_verify_nonce, check_admin_referer, check_ajax_referer, "*verify_nonce*", "->*verify_nonce*"]
   guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
   terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
   format_functions: [sprintf]

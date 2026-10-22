@@ -9,6 +9,8 @@ sanitizers: [wp_validate_redirect, admin_url, home_url, site_url, network_admin_
              get_admin_url, get_home_url, get_permalink, wp_login_url]
 sink: wp_redirect_location
 precision_notes: >
+  A nonce verified in the same function makes the finding weak: the attacker cannot build a working
+  link without a valid nonce (WooCommerce helper redirect, reported by the bounty pipeline triage).
   Request input → (assignments, concatenation, `??`, passthrough functions) → the first argument of
   wp_redirect() within one scope. esc_url / esc_url_raw / wp_sanitize_redirect pass the taint
   through: they clean characters, not the host. add_query_arg / remove_query_arg carry only the taint
@@ -17,6 +19,8 @@ precision_notes: >
   and unknown functions. header('Location: ...') is not covered in v0.1. Redirecting back to the
   HTTP referer is not reported (low value, needs the victim to arrive from the attacker's page).
 params:
+  # A nonce verified in the same function: a crafted link alone cannot trigger it → weak.
+  nonce_checks: [wp_verify_nonce, check_admin_referer, check_ajax_referer, "*verify_nonce*", "->*verify_nonce*"]
   guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
   terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
   sink_functions: [wp_redirect]
