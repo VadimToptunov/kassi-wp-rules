@@ -14,7 +14,7 @@ sanitizers: [esc_html, esc_attr, esc_url, esc_js, esc_textarea, esc_xml, esc_htm
 sink: echo_print
 precision_notes: >
   A nonce verified in the same function makes the finding weak: the attacker cannot build a working
-  link without a valid nonce (WooCommerce helper redirect, reported by the bounty pipeline triage).
+  link without a valid nonce.
   Reflected flows only: request input → (assignments, concatenation, interpolation, passthrough
   functions) → echo / print / short echo tag within one scope (a function or the file's top level,
   i.e. templates). Values read back from the database (stored XSS) are not tracked in v0.1.
