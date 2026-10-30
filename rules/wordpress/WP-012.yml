@@ -15,6 +15,11 @@ precision_notes: >
   branch, after an early exit, or after a fallback re-assignment (`if (!in_array($r, $ok)) { $r = 'subscriber'; }`).
   get_role($r) is not an allow-list: any existing role, including administrator, passes.
   sanitize_key / sanitize_text_field pass the taint through.
+  weak_if_guarded: when the same role variable is also passed to an allow-list guard (in_array,
+  array_key_exists) anywhere in the function, the finding is kept but weak even if the flow couldn't
+  connect the guard to the sink (a separate if-chain, a compound && condition, a fallback). Covers the
+  dominant FP: a role validated against an admin-defined list (clean-login cl_newuserroles,
+  Members members_is_role_editable + in_array) before set_role/add_role.
 params:
   # A capability check in the same function makes findings weak (only privileged users reach the sink).
   admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
@@ -23,6 +28,9 @@ params:
   role_keys: [role]
   meta_functions: [update_user_meta, add_user_meta, update_user_option]
   guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
+  # A role variable also passed to an allow-list guard (guard_functions) anywhere in the function makes
+  # the finding weak, even when the flow can't connect the guard to the sink (separate if-chain / && / fallback).
+  weak_if_guarded: true
   terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
   passthrough: [wp_unslash, stripslashes, trim, sanitize_text_field, sanitize_key, sanitize_title, strtolower,
                 wp_parse_args, array_merge]
