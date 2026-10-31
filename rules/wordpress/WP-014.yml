@@ -1,0 +1,63 @@
+id: WP-014
+platform: wordpress
+cwe: 502
+severity: critical
+summary: PHP object injection reaching a POP gadget chain (including cross-plugin chains)
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE', '$_SERVER[HTTP_*]',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params', '->get_body']
+sanitizers: [intval, absint, json_decode]
+sink: pop_gadget_chain
+precision_notes: >
+  Two catalogs over the co-install universe (every plugin/theme in the project, or the corpus) are
+  joined. SINKS: request input (including cookies) reaching unserialize()/maybe_unserialize() without
+  ['allowed_classes' => false], or a file operation (file_exists, file_get_contents, fopen,
+  getimagesize, is_file, md5_file, unlink, copy, ...) whose path derives from request input and can
+  carry a phar:// wrapper (PHAR deserialization). Reachability (unauth / low-priv / admin) is read
+  from the enclosing hook, REST route or capability check. GADGETS: a class whose magic method
+  (__destruct, __wakeup, __toString, __call, __get, __set) performs a dangerous op (file write/delete,
+  $wpdb SQL, exec/include, wp_remote_*, option write). A candidate chain is one (sink, gadget) pair;
+  the sink's plugin and the gadget's plugin may differ. The per-file inspection fires only when one
+  file holds both halves; the project report and headless corpus run produce the cross-plugin pairs.
+  A lone sink is WP-009's concern; a harmless magic method is not a gadget. Database/option reads are
+  not tracked, so second-order injection is not covered.
+params:
+  # --- sink detection (reuses the shared taint engine) ---
+  unserialize_functions: [unserialize, maybe_unserialize]
+  phar_file_functions: [file_exists, file_get_contents, fopen, getimagesize, is_file, is_dir,
+                        is_readable, file, readfile, md5_file, sha1_file, filemtime, filesize, stat,
+                        unlink, copy, rename, fileatime, filectime, exif_read_data, mime_content_type]
+  passthrough: [wp_unslash, stripslashes, stripslashes_deep, trim, ltrim, rtrim, base64_decode, urldecode,
+                rawurldecode, gzuncompress, gzinflate, gzdecode, str_replace, html_entity_decode, sanitize_text_field,
+                sanitize_textarea_field, hex2bin, strrev, sanitize_file_name, wp_normalize_path]
+  guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
+  terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
+  format_functions: [sprintf]
+  # --- gadget danger catalog (highest danger first wins) ---
+  gadget_magic_methods: [__destruct, __wakeup, __toString, __call, __get, __set, __invoke]
+  rce_sinks: [exec, system, passthru, shell_exec, popen, proc_open, eval, assert, create_function,
+              file_put_contents, fwrite, fputs, unlink, rename, copy, move_uploaded_file, mkdir, rmdir,
+              chmod, symlink, link]
+  sql_sinks: ['wpdb->query', 'wpdb->get_results', 'wpdb->get_var', 'wpdb->get_row', 'wpdb->get_col',
+              'wpdb->prepare', '->query', 'mysqli_query', 'mysql_query']
+  http_sinks: [wp_remote_get, wp_remote_post, wp_remote_request, wp_remote_head, wp_safe_remote_get,
+               wp_safe_remote_post, wp_safe_remote_request, curl_exec, fsockopen]
+  option_write_sinks: [update_option, add_option, delete_option, update_site_option, update_user_meta,
+                       update_post_meta, add_user_meta, set_transient, update_metadata]
+  info_sinks: [readfile, fpassthru, print_r, var_dump, var_export]
+  # --- reachability classification (same analysis the hook/REST rules use) ---
+  hook_registrars: [add_action, add_filter]
+  rest_registrars: [register_rest_route]
+  nopriv_markers: [nopriv]
+  low_priv_hook_prefixes: [wp_ajax_, admin_post_]
+  capability_checks: [current_user_can, user_can, is_super_admin, '*user_can*', '->*user_can*']
+  open_permission_callbacks: [__return_true, __return_1]
+references:
+  - cve: CVE-2026-49286
+    fix_commit: https://github.com/pontedilana/php-weasyprint/commit/d1aa487722b5a3cab9b222b85fdb5608a5a550c3
+    corpus: WP-014/case-01
+  - cve: CVE-2026-55220
+    fix_commit: https://github.com/pimcore/pimcore/pull/19181
+    corpus: WP-014/case-02
+plugin:
+  description_html: inspectionDescriptions/WP014PopChain.html
+  quick_fix: none
