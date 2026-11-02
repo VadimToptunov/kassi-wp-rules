@@ -30,7 +30,7 @@ sink: joomla_db_setquery
 precision_notes: >
   Intra-procedural taint (core/flow): Joomla request input -> assignments, `.=`, concatenation,
   interpolation, array reads/writes, foreach, `??`, passthrough functions -> the first argument of
-  $db->setQuery() (or a direct $db->query()/$db->q() with an inline SQL string). The canonical Joomla
+  $db->setQuery() (the only method that takes the SQL string). The canonical Joomla
   pattern is two-step: `$query = "... $tainted ..."; $db->setQuery($query); $db->loadResult();` — the
   injection point is the string handed to setQuery(), so loadResult/loadObjectList/loadColumn are the
   execution, not the sink. $db->quote()/$db->escape()/$db->quoteName() and (int) casts make a value
@@ -46,7 +46,13 @@ params:
   guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
   terminators: [jexit, 'die', 'exit']
   receivers: [db, dbo, _db]
-  sink_methods: [setquery, query, q]
+  # Only setQuery() takes the SQL *string*. $db->query()/$db->execute() run the already-set query
+  # (no SQL arg), and $db->q() is the quote() alias (a sanitizer, listed above) — neither is a sink.
+  sink_methods: [setquery]
+  # JInput ->get($name, $default, 'INT'): a numeric type filter in the 3rd arg casts the value, so
+  # the read is SQL-safe. 'string'/'raw'/'cmd' (and the default) do not, so they stay tainted sources.
+  filter_arg_readers: [get]
+  sanitizing_filters: [int, integer, uint, float, double]
   format_functions: [sprintf]
   passthrough: [trim, ltrim, rtrim, strtolower, strtoupper, implode, join, str_replace, substr,
                 urldecode, rawurldecode, html_entity_decode, base64_decode, json_decode, stripslashes]
