@@ -1,0 +1,62 @@
+---
+# DRAFT 2026-11-02 — Joomla reflected XSS. Reuses the WordPress UnescapedOutputCheck (platform-aware
+# message). CWE-79. Reflected flows only (request input -> echo/print in one scope); stored XSS
+# (value read back from the DB) is not tracked, same as WP-006.
+id: JL-006
+platform: joomla
+cwe: 79
+severity: high
+summary: Request input is echoed without htmlspecialchars()/$this->escape() (reflected XSS)
+# Joomla's JInput getters are filter-typed, and the filter decides XSS-safety:
+#   - get() (DEFAULT filter 'cmd'), getCmd, getWord, getAlnum, getInt/getUint/getFloat strip or reject
+#     '<', '>', '"', '\'' -> NOT XSS sources (getInt/Uint/Float are listed as sanitizers below).
+#   - getRaw (no filtering) and getHtml (tag/attribute allow-list, historically bypassable) ARE sources.
+#   - getString strips tags but KEEPS quotes (attribute-context breakout) -> a KNOWN MISS (see notes),
+#     left out to keep the rule quiet, mirroring WP-006's sanitize_text_field choice.
+# Raw superglobals carry no Joomla filtering, so they are always sources.
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE',
+         '$_SERVER[REQUEST_URI]', '$_SERVER[QUERY_STRING]', '$_SERVER[PHP_SELF]', '$_SERVER[PATH_INFO]',
+         '$_SERVER[HTTP_*]',
+         '->getRaw', '->getHtml']
+# Joomla output escaping. $this->escape() (HtmlView) wraps htmlspecialchars(); getInt/getUint/getFloat
+# return numbers. json_encode/urlencode change the context safely. NOTE: '->escape' is receiver-agnostic,
+# so $db->escape() (SQL escape, NOT HTML-safe) is also accepted here — a deliberate, documented miss
+# to catch the dominant $this->escape() view idiom without a receiver-qualified sanitizer.
+sanitizers: [htmlspecialchars, htmlentities, '->escape', intval, floatval,
+             '->getInt', '->getUint', '->getFloat', json_encode, urlencode, rawurlencode]
+sink: echo_print
+precision_notes: >
+  Intra-procedural taint (core/flow): Joomla request input (raw superglobals, $input->getRaw(),
+  $input->getHtml()) -> assignments, `.=`, concatenation, interpolation, passthrough functions ->
+  echo / print / short echo tag `<?= ?>` within one scope (a function or the template top level).
+  htmlspecialchars/htmlentities/$this->escape() and numeric casts (getInt/getUint/getFloat) make the
+  value safe. Silent on $input->get()/getCmd()/getWord() (their 'cmd'/'word' filters strip the HTML
+  metacharacters), on parameters/properties/unknown functions, and on values read back from the
+  database (stored XSS is out of scope for v0.1). KNOWN MISS: $input->getString() strips tags but not
+  quotes, so a getString value echoed inside an HTML attribute can still break out — accepted silently
+  to keep the rule quiet (same tradeoff as WP-006's sanitize_text_field). Output context (element vs
+  attribute vs URL) is not checked.
+params:
+  # Joomla CSRF token. Reflected XSS needs the victim to open a crafted link; a token verified in the
+  # same scope means the attacker cannot forge a working URL -> finding is weak.
+  nonce_checks: ['->checkToken', checkToken, '*checkToken*', '->*checkToken*', getFormToken, '->getFormToken']
+  guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
+  terminators: [jexit, 'die', 'exit', close]
+  format_functions: [sprintf]
+  passthrough: [trim, ltrim, rtrim, strtolower, strtoupper, implode, join, str_replace, substr,
+                urldecode, rawurldecode, html_entity_decode, base64_decode, stripslashes, nl2br]
+# Real-CVE anchors (synthetic reflected-XSS fixtures; see note in each meta.yml). All 2026, CWE-79,
+# unauthenticated reflected XSS in Joomla extensions.
+references:
+  - cve: CVE-2026-65762   # Phoca Guestbook — unauth reflected XSS, front-end guestbook, <= 6.1.0
+    fix_commit: https://nvd.nist.gov/vuln/detail/CVE-2026-65762
+    corpus: JL-006/case-01
+  - cve: CVE-2026-63264   # JoomShopping — unauth reflected XSS, product frontend controller, <= 5.9.2
+    fix_commit: https://nvd.nist.gov/vuln/detail/CVE-2026-63264
+    corpus: JL-006/case-02
+  - cve: CVE-2026-102426  # SP Page Builder Pro — unauth reflected XSS, Dynamic Content Filter addon
+    fix_commit: https://nvd.nist.gov/vuln/detail/CVE-2026-102426
+    corpus: JL-006/case-03
+plugin:
+  description_html: inspectionDescriptions/JL006UnescapedOutput.html
+  quick_fix: none

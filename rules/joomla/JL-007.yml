@@ -1,0 +1,65 @@
+---
+# DRAFT 2026-11-02 — Joomla local file inclusion / path traversal. Reuses the WordPress
+# UnsafePathCheck (platform-aware message). CWE-22. Request input reaches an include/require or a
+# filesystem read without basename()/realpath()/an allow-list.
+id: JL-007
+platform: joomla
+cwe: 22
+severity: high
+summary: File path built from request input reaches include/require or a file read (LFI / path traversal)
+# Path traversal needs directory separators ('/', '..'), so the JInput filter decides the risk:
+#   - get() (DEFAULT 'cmd'), getCmd, getWord, getAlnum strip '/' entirely -> traversal impossible ->
+#     NOT sources (getCmd/getWord are listed as sanitizers below); getInt/getUint/getFloat are numeric.
+#   - getString strips HTML tags but KEEPS '/' and '.' -> '../../etc/passwd' survives -> a source.
+#   - getRaw (no filtering) and getPath (PATH filter keeps [A-Za-z0-9_./-], i.e. slashes+dots) ARE sources.
+# Raw superglobals carry no Joomla filtering, so they are always sources.
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE',
+         '->getString', '->getRaw', '->getPath']
+# basename()/realpath() and the slash-stripping JInput filters (getCmd/getWord) defeat traversal;
+# getInt/getUint/getFloat return numbers. Joomla's JPath::clean()/JFile::makeSafe() are STATIC calls,
+# which the engine already treats as proof-ending (clean) — no need to list them.
+sanitizers: [basename, realpath, intval, '->getInt', '->getUint', '->getFloat', '->getCmd', '->getWord']
+sink: file_path_argument
+precision_notes: >
+  Intra-procedural taint (core/flow): Joomla request input (raw superglobals, $input->getString(),
+  getRaw(), getPath()) -> assignments, concatenation, interpolation, passthrough functions -> the path
+  argument of readfile/file_get_contents/fopen/file/show_source/highlight_file, or the path of
+  include/require(_once). basename()/realpath() and the slash-stripping readers (getCmd/getWord) and an
+  allow-list guard (in_array) are accepted; str_replace('../','',...) is a passthrough (it does not stop
+  traversal). JPath::clean()/JFile::makeSafe() are static calls -> already proof-ending (silence over
+  noise). getString KEEPS slashes, so it is a source here (unlike JL-006 where it is only a quote risk).
+  Silent on $input->get()/getCmd()/getWord(), parameters and unknown functions. Known miss: a
+  realpath()+prefix-check guard on a different variable than the sink argument is not recognised; a
+  static JFile::read()/JFolder::files() sink (not a plain call) is not matched in v0.1.
+params:
+  # Joomla ACL. The victim is the server; a capability check in the same scope means only privileged
+  # users reach the sink -> finding is weak.
+  admin_checks: ['->authorise', authorise, '*authorise*', '->*authorise*']
+  sink_args:
+    readfile: "0"
+    file_get_contents: "0"
+    fopen: "0"
+    file: "0"
+    show_source: "0"
+    highlight_file: "0"
+  include_sinks: [include, include_once, require, require_once]
+  guard_functions: [in_array, array_key_exists, ctype_alnum, ctype_alpha]
+  terminators: [jexit, 'die', 'exit', close]
+  format_functions: [sprintf]
+  passthrough: [trim, ltrim, rtrim, urldecode, rawurldecode, base64_decode, str_replace, implode, join,
+                strtolower, substr, dirname, stripslashes]
+# Real-CVE anchors (synthetic LFI/path-traversal fixtures; see note in each meta.yml). All 2026,
+# CWE-22, unauthenticated.
+references:
+  - cve: CVE-2026-67285   # SP Page Builder — unauth LFI -> code execution, < 6.8.0 (include of local PHP)
+    fix_commit: https://nvd.nist.gov/vuln/detail/CVE-2026-67285
+    corpus: JL-007/case-01
+  - cve: CVE-2026-60027   # Quix Page Builder Pro — unauth arbitrary file read, < 6.2.1
+    fix_commit: https://nvd.nist.gov/vuln/detail/CVE-2026-60027
+    corpus: JL-007/case-02
+  - cve: CVE-2026-102424  # Balbooa Forms — unauth local file read during public form submission, < 2.4.3.4
+    fix_commit: https://nvd.nist.gov/vuln/detail/CVE-2026-102424
+    corpus: JL-007/case-03
+plugin:
+  description_html: inspectionDescriptions/JL007UnsafeFilePath.html
+  quick_fix: none
