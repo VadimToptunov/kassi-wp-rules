@@ -12,13 +12,14 @@ severity: critical
 summary: SQL built from request input reaches $db->setQuery() without $db->quote()/escape() or an integer cast
 # Joomla request-input readers. getInt/getUint/getFloat are casts (safe) -> listed under sanitizers,
 # NOT here. The dangerous readers return strings/raw/arrays.
-# ENGINE LIMITATION: SourceSpec matches `->method` by method name only (receiver-agnostic, single
-# ident). So `$input->get()` (bare) can't be expressed without also matching every Registry/params
-# `->get()` (rampant FPs), and chained `->input->get` / static `JRequest::getVar` aren't expressible.
-# We take the SPECIFIC JInput getters (low collision) + superglobals. KNOWN RECALL GAP: misses
-# `$input->get('x')` (bare). Candidate engine enhancement: receiver-qualified sources for Joomla.
+# Bare `->get()` is Joomla's dominant SQLi source but is shared with Registry/params `->get()` — so it
+# is expressed as a RECEIVER-QUALIFIED source (`$input->get`/`$jinput->get`): the engine matches `->get`
+# only when the receiver's variable or property name is `input`/`jinput`, which also covers the chained
+# `$app->input->get` / `$this->input->get` (property named `input`). The SPECIFIC JInput getters stay
+# receiver-agnostic (low collision). Still not expressible: static `JRequest::getVar` (legacy `::`).
 source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE', '$_SERVER[REQUEST_URI]', '$_SERVER[QUERY_STRING]',
          '$_SERVER[HTTP_*]',
+         '$input->get', '$jinput->get',
          '->getString', '->getRaw', '->getArray', '->getCmd', '->getHtml', '->getBase64',
          '->getVar', '->getWord', '->getUsername', '->getPath']
 # $db->quote()/escape() and integer casts are the real SQL-safe sinks in Joomla. getInt/getUint/
