@@ -1,0 +1,43 @@
+id: WP-015
+platform: wordpress
+cwe: 78
+severity: critical
+summary: Request data used as an OS command (command injection / RCE)
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params']
+sanitizers: [escapeshellarg, escapeshellcmd]
+sink: command_argument
+precision_notes: >
+  Intra-procedural taint (core/flow): request input → assignments, concatenation, interpolation,
+  passthrough functions → the command argument of exec, system, shell_exec, passthru, popen or
+  proc_open. escapeshellarg() and escapeshellcmd() are the accepted defences; wp_unslash,
+  sanitize_text_field, trim and urldecode pass the taint through (they do not neutralise shell
+  metacharacters). An in_array()/ctype_* allow-list guard on the value, or a capability check in the
+  same function, weakens the finding. Silent on parameters, options and unknown functions.
+  Known misses (silence over noise): the backtick operator `...` is not a CALL node and is not seen;
+  escapeshellcmd() is accepted even though it still allows argument injection (e.g. a leading `-`);
+  and proc_open() given an array command (PHP 7.4+) is the safe form but is not distinguished from the
+  string form, so an array built from request data is still reported.
+params:
+  # A capability check in the same function makes findings weak (only privileged users reach the sink).
+  # Command injection's attacker is the requester, so a nonce does not reduce the risk (no nonce_checks).
+  admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
+  sink_args:
+    exec: "0"
+    system: "0"
+    shell_exec: "0"
+    passthru: "0"
+    popen: "0"
+    proc_open: "0"
+  guard_functions: [in_array, array_key_exists, ctype_alnum, ctype_digit]
+  terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
+  format_functions: [sprintf]
+  passthrough: [wp_unslash, stripslashes, sanitize_text_field, trim, ltrim, rtrim, urldecode, rawurldecode,
+                strval, implode, join]
+references:
+  - cve: CVE-2018-15877
+    fix_commit: https://nvd.nist.gov/vuln/detail/CVE-2018-15877
+    corpus: WP-015/case-01
+plugin:
+  description_html: inspectionDescriptions/WP015CommandInjection.html
+  quick_fix: none
