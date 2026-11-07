@@ -1,0 +1,40 @@
+id: WP-016
+platform: wordpress
+cwe: 94
+severity: critical
+summary: Request data evaluated as PHP code (PHP code injection / RCE)
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params']
+sanitizers: []
+sink: code_argument
+precision_notes: >
+  Intra-procedural taint (core/flow): request input → assignments, concatenation, interpolation,
+  passthrough functions → the code argument of eval(), assert() or the body argument of
+  create_function(). There is no sanitiser that makes evaluating request data as PHP safe; the clean
+  paths are an (int)/(float) cast, an in_array()/ctype_* allow-list guard, or evaluating a literal /
+  option value instead. A capability check in the same function weakens the finding (still RCE, but
+  privileged-only). Silent on parameters, options and unknown functions.
+  Scope notes (silence over noise): assert() only evaluates a string argument on PHP < 8, and
+  create_function() was removed in PHP 8, but both are still flagged on the code/body argument because
+  the affected code targets those runtimes; preg_replace() with the /e modifier (removed in PHP 7) is
+  not handled.
+params:
+  # A capability check in the same function makes findings weak (only privileged users reach the sink).
+  # The attacker is the requester, so a nonce does not reduce the risk (no nonce_checks).
+  admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
+  sink_args:
+    eval: "0"
+    assert: "0"
+    create_function: "1"
+  guard_functions: [in_array, array_key_exists, ctype_alnum, ctype_digit]
+  terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
+  format_functions: [sprintf]
+  passthrough: [wp_unslash, stripslashes, sanitize_text_field, trim, ltrim, rtrim, urldecode, rawurldecode,
+                strval, implode, join]
+references:
+  - cve: CVE-2026-3300
+    fix_commit: https://nvd.nist.gov/vuln/detail/CVE-2026-3300
+    corpus: WP-016/case-01
+plugin:
+  description_html: inspectionDescriptions/WP016CodeInjection.html
+  quick_fix: none
