@@ -22,6 +22,11 @@ params:
   # Writes only to keys like these (dismissed notices, review prompts, onboarding/tracking flags) → weak.
   low_impact_keys: ["(dismiss|notice|review|rating|rate_?us|banner|tracking|optin|opt_in|feedback|onboard|popup|modal|tour|pointer|welcome|upsell|promo|nag|survey|deactivat)"]
   endpoint_prefixes: [wp_ajax_, admin_post_]   # handlers also hooked elsewhere are event reactors: skipped
+  # A per-plugin gate the sanitizers list can't name — an `if` testing a call/comparison whose branch
+  # aborts the request (wp_send_json_error, a `*_and_die` responder, exit) — in the handler or a
+  # one-level helper (a token/apikey validator, a `valid_token()` that dies on a bad token). The sink
+  # is still reported, but weak: some request validation is present, so it is not a clean nopriv path.
+  detect_custom_gates: true
   hook_prefixes: [wp_ajax_nopriv_, admin_post_nopriv_]
   sinks: [update_option, delete_option, update_site_option, delete_site_option, wp_update_user,
           wp_delete_user, "->set_role", "->add_role", "->add_cap", "->remove_cap", unlink, rmdir, rename, copy,
