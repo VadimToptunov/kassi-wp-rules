@@ -1,0 +1,38 @@
+id: WP-017
+platform: wordpress
+cwe: 93
+severity: high
+summary: Request data reaches an email header (wp_mail/mail), allowing CRLF header injection
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params']
+sanitizers: [sanitize_email, sanitize_text_field, absint, intval, sanitize_key]
+sink: mail_headers_argument
+precision_notes: >
+  Intra-procedural taint (core/flow): request input → assignments, concatenation, interpolation,
+  passthrough functions → the $headers argument (index 3) of wp_mail() or PHP mail(). A CR/LF left in
+  that value injects extra headers (Bcc / Cc / a forged From). sanitize_text_field() and sanitize_email()
+  drop line breaks and clear the taint; wp_strip_all_tags(), trim(), str_replace() and
+  sanitize_textarea_field() do NOT remove an interior CR/LF and pass the taint through
+  (sanitize_textarea_field preserving the break was the root cause of CVE-2026-12127). Only the headers
+  argument is a sink: the $to and $subject arguments are left to WordPress's own PHPMailer handling, to
+  avoid noise (silence over noise). A capability check in the same function makes the finding weak (only
+  privileged users reach the sink). Silent on parameters and unknown functions.
+params:
+  # A capability check in the same function makes findings weak (only privileged users reach the sink).
+  admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
+  sink_args:
+    wp_mail: "3"
+    mail: "3"
+  guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
+  terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
+  format_functions: [sprintf]
+  passthrough: [wp_unslash, stripslashes, trim, ltrim, rtrim, urldecode, rawurldecode, base64_decode,
+                str_replace, wp_strip_all_tags, sanitize_textarea_field, html_entity_decode, implode, join,
+                strtolower, substr, trailingslashit, untrailingslashit]
+references:
+  - cve: CVE-2026-2442
+    fix_commit: https://plugins.trac.wordpress.org/changeset/3464204/pagelayer
+    corpus: WP-017/case-01
+plugin:
+  description_html: inspectionDescriptions/WP017MailHeaderInjection.html
+  quick_fix: none
