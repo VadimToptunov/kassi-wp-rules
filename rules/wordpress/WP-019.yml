@@ -1,0 +1,40 @@
+id: WP-019
+platform: wordpress
+cwe: 94
+severity: high
+summary: Request data is used as the callable in call_user_func()/call_user_func_array() (arbitrary function invocation)
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params']
+sanitizers: []
+sink: dynamic_callable_argument
+precision_notes: >
+  Intra-procedural taint (core/flow): request input → assignments, concatenation, passthrough functions
+  → the callable argument (index 0) of call_user_func() or call_user_func_array(). The attacker then
+  chooses which PHP function runs (often RCE). NO string sanitiser helps: sanitize_text_field() and
+  sanitize_key() clean the string but do not stop it from naming a dangerous function, so they are
+  passthrough (this is the crux of CVE-2026-1929 — the plugin called sanitize_text_field() on the
+  callback and still passed it to call_user_func_array()). The only clean paths are an in_array()
+  allow-list of the callable against known callbacks (accepted inside the guarded branch or after an
+  early exit) or a non-request value. A callable built with a fixed literal prefix
+  ('myplugin_ajax_' . $request . '_handler') is NOT reported: the prefix pins the dispatch to one
+  namespace, so it cannot name an arbitrary function (a common safe idiom — e.g. Wordfence's
+  'wordfence::ajax_' . $f . '_callback'). A capability check in the same function makes the finding weak.
+  Silent on parameters and unknown functions.
+params:
+  # A capability check in the same function makes findings weak (only privileged users reach the sink).
+  admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
+  sink_args:
+    call_user_func: "0"
+    call_user_func_array: "0"
+  guard_functions: [in_array, array_key_exists, is_callable]
+  terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
+  format_functions: [sprintf]
+  passthrough: [wp_unslash, stripslashes, sanitize_text_field, sanitize_key, trim, ltrim, rtrim,
+                strtolower, strtoupper, substr, str_replace, html_entity_decode]
+references:
+  - cve: CVE-2026-1929
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/advanced-woo-labels/tags/2.36&new_path=/advanced-woo-labels/tags/2.37
+    corpus: WP-019/case-01
+plugin:
+  description_html: inspectionDescriptions/WP019CallbackInjection.html
+  quick_fix: none
