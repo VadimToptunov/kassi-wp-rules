@@ -1,0 +1,37 @@
+id: WP-018
+platform: wordpress
+cwe: 113
+severity: high
+summary: Request data reaches PHP header(), allowing HTTP response header injection (CRLF)
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE', '$_SERVER[HTTP_*]',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params']
+sanitizers: [sanitize_text_field, sanitize_key, sanitize_email, absint, intval]
+sink: response_header_argument
+precision_notes: >
+  Intra-procedural taint (core/flow): request input → assignments, concatenation, interpolation,
+  passthrough functions → the argument of PHP header(). A CR/LF left in that value injects extra
+  response headers or splits the response (effective pre-PHP-8, where header() did not reject line
+  breaks). sanitize_text_field(), sanitize_key() and an (int) cast remove line breaks and clear the
+  taint; esc_url_raw(), esc_html() and str_replace() do NOT, on their own, remove an interior CR/LF and
+  pass the taint through (the real fix for CVE-2026-2811 cleared the taint with sanitize_text_field()
+  first, then applied those). This is the raw header() sink only: wp_redirect()/wp_safe_redirect() to a
+  Location built from request data is WP-008's concern (open redirect), to avoid double reporting. A
+  capability check in the same function makes the finding weak. Silent on parameters and unknown functions.
+params:
+  # A capability check in the same function makes findings weak (only privileged users reach the sink).
+  admin_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
+  sink_args:
+    header: "0"
+  guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
+  terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
+  format_functions: [sprintf]
+  passthrough: [wp_unslash, stripslashes, trim, ltrim, rtrim, urldecode, rawurldecode, base64_decode,
+                str_replace, esc_url_raw, esc_url, esc_html, html_entity_decode, implode, join,
+                strtolower, substr, trailingslashit, untrailingslashit]
+references:
+  - cve: CVE-2026-2811
+    fix_commit: https://plugins.trac.wordpress.org/changeset?old_path=/wp-ajaxify-comments/tags/3.1.2&new_path=/wp-ajaxify-comments/tags/3.2.0
+    corpus: WP-018/case-01
+plugin:
+  description_html: inspectionDescriptions/WP018HttpHeaderInjection.html
+  quick_fix: none
