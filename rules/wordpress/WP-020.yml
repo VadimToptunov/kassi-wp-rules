@@ -60,6 +60,7 @@ references:
   # Seed; corpus cases for WP-020 pairs live under corpus/cases/WP-020/ (to be added alongside
   # the first validated finding on this engine).
   - cve: CVE-2024-11199
+    corpus: WP-020/case-01
 plugin:
   description_html: inspectionDescriptions/WP020CrossRoleStoredXss.html
   quick_fix: none
