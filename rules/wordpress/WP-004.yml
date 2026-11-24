@@ -37,6 +37,11 @@ params:
           wp_delete_file, activate_plugin, deactivate_plugins, delete_plugins, switch_theme]
   capability_checks: [current_user_can, user_can, is_super_admin, current_user_can_for_blog, current_user_can_for_site,
              "*user_can*", "->*user_can*", hash_equals, hash_hmac]
+  # OAuth 2.0 endpoint paths that are unauthenticated by spec (RFC 6749 §3.2, RFC 7009, RFC 7662,
+  # RFC 7591). The server authenticates the client inside the handler via client_secret / PKCE /
+  # a bearer token, not via permission_callback. Suffix-matched on the route path (register_rest_route
+  # arg 2). Suppresses the warning (missing callback) and the always-true weak finding on these paths.
+  oauth_unauth_paths: [/oauth/token, /oauth/revoke, /oauth/introspect, /oauth/register]
 references:
   - cve: CVE-2022-0218
     fix_commit: https://plugins.trac.wordpress.org/changeset/2656984/wp-html-mail/trunk/includes/class-template-designer.php

@@ -1,0 +1,66 @@
+id: WP-020
+platform: wordpress
+cwe: 79
+severity: high
+summary: Cross-role stored XSS (request input written to options/meta, read back and echoed)
+source: ['$_GET', '$_POST', '$_REQUEST', '$_COOKIE', '$_SERVER[REQUEST_URI]', '$_SERVER[QUERY_STRING]',
+         '$_SERVER[PHP_SELF]', '$_SERVER[PATH_INFO]', '$_SERVER[HTTP_*]',
+         '->get_param', '->get_params', '->get_json_params', '->get_body_params', '->get_query_params',
+         '->get_url_params', '->get_body']
+sanitizers: []
+sink: storage_pair_xss
+precision_notes: >
+  Plugin-wide, two-pass. Pass A collects storage writes: request input flows (intra-procedural taint,
+  passthrough + partial escapers only) into the value argument of update_option, update_site_option,
+  add_option, update_user_meta, update_post_meta, update_term_meta, wpdb->insert/update, or
+  wp_insert_post (post_content / post_title / post_excerpt). The storage key must resolve to a string
+  literal in the same scope. Pass B collects storage reads: get_option, get_site_option,
+  get_user_meta, get_post_meta, get_term_meta, or wpdb->get_* with a literal key that flows into echo,
+  print or `<?= ?>` without an escaper from WP-006. A finding is emitted per (writer, reader) pair
+  that share a plugin and a storage key.
+  Weak unless there is a role gap: the writer's hook is a public surface (wp_ajax_nopriv_*, or REST
+  __return_true, or admin-post without a cap check) while the reader runs on a path that requires a
+  higher capability (admin menu, WP_List_Table, settings page). A same-role write-and-read (both
+  admin-cap, both logged-in author) is still emitted but weak — self-XSS on most programs.
+  sanitize_text_field passes through on the write side (keeps quotes), so a stored value can still
+  break out of an HTML attribute (CVE-2024-11199 pattern). wp_kses / wp_kses_post / esc_html / esc_attr
+  on the write side are treated as safe. A missing storage key (not a literal) or an unknown reader
+  function silently skips the pair.
+params:
+  # Write-side sinks: the value argument index is the target.
+  write_sinks:
+    update_option: "1"
+    update_site_option: "1"
+    add_option: "1"
+    update_user_meta: "2"
+    update_post_meta: "2"
+    update_term_meta: "2"
+    "wpdb->insert": "1"       # value array, scanned for tainted entries
+    "wpdb->update": "1"
+    wp_insert_post: "0"       # postarr; scanned for post_content / post_title / post_excerpt
+  # Read-side sources: return value is stored content; first arg is the storage key.
+  read_sources: [get_option, get_site_option, get_user_meta, get_post_meta, get_term_meta,
+                 "wpdb->get_row", "wpdb->get_results", "wpdb->get_var", "wpdb->get_col"]
+  escapers: [esc_html, esc_attr, esc_url, esc_js, esc_textarea, esc_xml, esc_html__, esc_attr__,
+             wp_kses, wp_kses_post, wp_kses_data, htmlspecialchars, htmlentities, intval, absint,
+             floatval, boolval, json_encode, wp_json_encode, urlencode, rawurlencode, sanitize_key,
+             sanitize_title, sanitize_hex_color, sanitize_email, number_format]
+  # Treated as passthrough on BOTH sides (do not strip XSS payloads).
+  passthrough: [wp_unslash, stripslashes, stripslashes_deep, trim, ltrim, rtrim, strtolower, strtoupper,
+                urldecode, rawurldecode, html_entity_decode, base64_decode, implode, join, str_replace,
+                substr, ucfirst, ucwords, nl2br, add_query_arg, remove_query_arg, sanitize_text_field,
+                sanitize_textarea_field, maybe_unserialize]
+  format_functions: [sprintf]
+  # Hook prefixes that make the writer reachable WITHOUT a wp-admin session.
+  public_write_hooks: [wp_ajax_nopriv_, admin_post_nopriv_]
+  rest_open_permission_callbacks: [__return_true]
+  # Reader-side capability checks that imply the view runs in an admin screen.
+  admin_cap_checks: [current_user_can, user_can, is_super_admin, "*user_can*", "->*user_can*"]
+references:
+  # Seed; corpus cases for WP-020 pairs live under corpus/cases/WP-020/ (to be added alongside
+  # the first validated finding on this engine).
+  - cve: CVE-2024-11199
+    corpus: WP-020/case-01
+plugin:
+  description_html: inspectionDescriptions/WP020CrossRoleStoredXss.html
+  quick_fix: none
