@@ -25,6 +25,10 @@ precision_notes: >
 params:
   # A nonce verified in the same function: a crafted link alone cannot trigger it → weak.
   nonce_checks: [wp_verify_nonce, check_admin_referer, check_ajax_referer, "*verify_nonce*", "->*verify_nonce*"]
+  # When every source is a literal $_SERVER[HTTP_*] read (HTTP_HOST echoed into an admin wizard is
+  # the canonical shape): exploitation needs a misconfigured catch-all vhost plus a forged request
+  # to a privileged victim, which most mature programs classify as self-XSS (>2 steps) / known-out.
+  weak_if_host_header_only: true
   guard_functions: [in_array, array_key_exists, is_numeric, ctype_digit, ctype_alnum]
   terminators: [wp_die, wp_send_json, wp_send_json_error, wp_send_json_success]
   format_functions: [sprintf]
